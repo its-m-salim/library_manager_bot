@@ -91,6 +91,111 @@ ID: {book["id"]}
 """
     await message.answer(text)
 
+
+
+@dp.message(Command("borrow"))
+async def bb(message: Message, command:CommandObject):
+    if not command.args:
+        await message.answer("""
+укажите id книги!
+""")
+        return
+
+    data = command.args.split("/")
+    if  len(data) > 1:
+        await message.answer("""
+    Неверный формат ввода! 
+    Используйте /help чтобы увидеть примеры
+    """)
+        return
+
+    if not data[0].isdigit():
+        await message.answer("""
+id не может быт словом!
+""")
+        return
+    status = await is_active(data[0])
+    if not status:
+        await message.answer("книга не существует!")
+        return
+    else:
+        if not status["is_available"]:
+            await message.answer("книга занят!")
+            return
+    if await borrow_book(data[0], message.from_user.id):
+        await message.answer("""
+книга успешно бран!
+""")
+    else:
+        await message.answer("""
+книга либо нет либо занят
+""")
+
+
+@dp.message(F.text == "📖 Мои книги")
+@dp.message(Command("my_books"))
+async def get_books(message: Message):
+    all_books = await my_books(message.from_user.id)
+
+    if not all_books:
+        await message.answer("you have not books")
+        return
+
+    text = "Вот ваши книги:\n"
+
+    for b in all_books:
+        text += f"""
+title: {b["title"]}
+author: {b["author"]}
+borrowed at: {b["bat"]}
+"""
+    await message.answer(text)
+    
+
+
+
+@dp.message(Command("return"))
+async def rb(message: Message, command:CommandObject):
+    if not command.args:
+        await message.answer("""
+укажите id книги!
+""")
+        return
+
+    data = command.args.split("/")
+    if  len(data) > 1:
+        await message.answer("""
+    Неверный формат ввода! 
+    Используйте /help чтобы увидеть примеры
+    """)
+        return
+
+    if not data[0].isdigit():
+        await message.answer("""
+id не может быт словом!
+""")
+        return
+    status = await is_active(data[0])
+    if not status:
+        await message.answer("книга не существует!")
+        return
+    else:
+        if status["is_available"]:
+            await message.answer("Вы не брали эту книгу!")
+            return
+    if await return_book(data[0], message.from_user.id):
+        await message.answer("""
+книга успешно выдан!
+""")
+    else:
+        await message.answer("""
+не успешная ошибка при выдачи
+""")
+
+
+
+
+
 async def main():
     print("Bot started")
     await create_tables()
