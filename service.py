@@ -17,18 +17,7 @@ async def create_user(username, full_name, tg_id):
 
 
 
-# async def borrow(user_id, book_id, due_date):
-#     try:
-#         conn = await connection_db()
-#         await conn.execute("""
-#         insert into borrows(user_id, book_id, borrowed_at, due_date) values
-#             ($1, $2, $3)
-# """, user_id, book_id, due_date)
-#         return True
-#     except Exception as error:
-#         print(f"{type(error)}: {error} sb.py")     
-#     finally:
-#         await conn.close()   
+
 
 
 async def profile(tg_id):
@@ -45,13 +34,13 @@ async def profile(tg_id):
         await conn.close()   
 
 
-async def add_books(title, author):
+async def add_books(title, author, read_url=None):
     try:
         conn = await connection_db()
         await conn.execute("""
-        insert into books(title, author) values
-                ($1, $2)
-    """, title, author )
+        insert into books(title, author, read_url) values
+                ($1, $2, $3)
+    """, title, author, read_url)
         return True
     except Exception as error:
         print(f"{type(error)}: {error} sab.py")    
@@ -213,7 +202,21 @@ async def return_book(b_id, tg_id):
 
 
 
-
+async def overdue(tg_id):
+    try:
+        conn = await connection_db()
+        invalid_books = await conn.fetch("""
+        select books.id as id,  books.title as title, books.author as author, borrows.borrowed_at as bat from borrows
+        join books on books.id = borrows.book_id
+        where borrows.user_id = $1 and returned_at is null
+        and borrows.borrowed_at < now() - interval'14 days'
+""", str(tg_id))
+        return invalid_books
+    except Exception as error:
+        print(f"{type(error)}: {error} sov.py") 
+        return False    
+    finally:
+        await conn.close()   
 
 
 
@@ -222,7 +225,7 @@ async def my_books(tg_id):
     try:
         conn = await connection_db()
         books = await conn.fetch("""
-select books.id as id,  books.title as title, books.author as author, borrows.borrowed_at as bat from borrows
+select books.id as id,  books.title as title, books.author as author, borrows.borrowed_at as bat, books.read_url from borrows
 join books on books.id = borrows.book_id
 where borrows.user_id = $1 and returned_at is null
 """, str(tg_id))

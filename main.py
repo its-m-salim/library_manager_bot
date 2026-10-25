@@ -47,23 +47,34 @@ async def add_book(message: Message, command: CommandObject):
 Формат: /add_book Название книги/Имя автора
 """)
         return
-
-    data = command.args.split("/")
-
-    if not 1< len(data) < 3:
+    data = command.args.split("/", 2)
+    if not 1 < len(data) <= 3:
         await message.answer("""
 ⚠️ Неверный формат команды. 
 Используйте /help чтобы увидеть примеры
-""")
+    """)
         return
 
-    if await add_books(data[0], data[1]):
-        await message.answer(f"""
+    text = f"""
 ✅ Книга «{data[0]}» — автор {data[1]} — успешно добавлена в библиотеку!
-📚 Открой /books, чтобы посмотреть каталог доступных книг.
-""")
+Открой /books, чтобы посмотреть каталог доступных книг.
+    """
+    
+    if len(data) == 2:
+        addbook = await add_books(data[0], data[1])
+    
+    elif len(data) == 3:
+        url = data[2].strip()
+        if url and not url.startswith("https://"):
+            text += "\n⚠️ Ссылка не добавлена: используй адрес, начинающийся с https://"
+            addbook = await add_books(data[0], data[1])
+        else:
+            addbook = await add_books(data[0], data[1], url)
+            text += "\n🔗 К книге добавлена ссылка для чтения!"    
+    if addbook:
+        await message.answer(text)
     else:
-        message.answer("""
+        await message.answer("""
 Книга не добавлено!
 Проверьте правильность ввода
 """)
@@ -171,13 +182,49 @@ async def get_books(message: Message):
     
     for b in all_books:
         date_frm = format_date(b["bat"])
+        read_url = b["read_url"]
+        if read_url:
+            url = f'\nКнига доступна для чтения!\n<a href="{read_url}">📖 Читать книгу онлайн</a>\n'
+        else:
+            url = ""
         text += f"""
 🆔 ID: {b["id"]}
 📚 Название: {b["title"]}
 ✍️ Автор: {b["author"]}
-🕒 Получена: {date_frm}
+🕒 Получена: {date_frm+url}
 """
+    await message.answer(text, parse_mode='HTML')
+    
+
+
+@dp.message(Command("overdue"))
+async def invalids(message: Message):
+    invalid_books = await overdue(message.from_user.id)
+
+    if not invalid_books:
+        await message.answer("""
+✅ У тебя нет просроченных книг!
+Все книги возвращены вовремя или срок их выдачи ещё не истёк.
+""")
+        return
+
+    text = """
+⏰ Просроченные книги
+
+Эти книги находятся у тебя более 14 дней:\n"""
+
+    for b in invalid_books:
+        date_frm = format_date(b["bat"])
+        text += f"""
+🆔 ID: {b["id"]}
+📚 Название: {b["title"]}
+✍️ Автор: {b["author"]}
+📅 Дата выдачи: {date_frm}
+
+"""
+    text += "📤 Пожалуйста, верни книги в библиотеку."
     await message.answer(text)
+
     
 
 
@@ -237,7 +284,47 @@ async def rb(message: Message, command:CommandObject):
 """)
 
 
+@dp.message(Command("help"))
+async def help_command(message: Message):
+    await message.answer("""
+📚 Библиотека — справка
 
+Привет! 👋 Здесь ты можешь просматривать каталог, брать книги и следить за сроками их возврата.
+
+📖 Каталог
+/books — посмотреть доступные книги.
+
+➕ Добавление книги
+/add_book Название/Автор
+
+Чтобы добавить книгу со ссылкой для чтения:
+"/add_book Название/Автор/https://example.com/book"
+
+🔗 Ссылка необязательна. Она будет доступна читателю, которому выдана эта книга.
+
+📥 Получение книги
+/borrow ID — взять книгу из библиотеки.
+Пример: "/borrow 12"
+
+📤 Возврат книги
+/return_book ID — вернуть книгу.
+Пример: "/return_book 12"
+
+📚 Мои книги
+/my_borrows — посмотреть книги, которые сейчас у тебя на руках.
+
+⏰ Просроченные книги
+/overdue — проверить, какие книги ты держишь более 14 дней.
+
+💡 Полезно знать
+• ID книги можно найти в каталоге "/books".
+• Одну книгу одновременно может взять только один пользователь.
+• После возврата книга снова становится доступной.
+• Ссылка для чтения отображается только при наличии соответствующей выданной книги.
+• 🏆 В каталоге отмечаются бестселлеры — книги, которые брали более 3 раз.
+
+✨ Приятного чтения!
+""")
 
 
 async def main():

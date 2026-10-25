@@ -29,6 +29,7 @@ async def create_tables():
             author varchar(200),
             added_at timestamp default now(),
             borrows_count int default 0,
+            read_url text,
             is_available bool default true,
             is_active bool default true
         );
@@ -39,7 +40,7 @@ async def create_tables():
             full_name varchar(200),
             telegram_id varchar(200) unique,
             total_books int default 0,
-            created_at timestamptz default now(),
+            created_at timestamp default now(),
             is_active bool default true
         );
         
@@ -47,9 +48,9 @@ async def create_tables():
             id serial primary key,
             user_id varchar(200) references users(telegram_id),
             book_id int references books(id),
-            borrowed_at timestamptz default now(),
-            due_date timestamptz default now() + interval'14 days',
-            returned_at timestamptz ,
+            borrowed_at timestamp default now(),
+            due_date timestamp default now() + interval'14 days',
+            returned_at timestamp ,
             is_active bool default true
 
         )
