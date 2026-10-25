@@ -1,5 +1,5 @@
 from connection import*
-
+from datetime import datetime, date
 
 
 async def create_user(username, full_name, tg_id):
@@ -67,6 +67,7 @@ async def active_books():
         books = await conn.fetch("""
         select * from books 
         where is_available = true
+        order by id
 """)
         return unvailable, books
     except Exception as error:
@@ -191,7 +192,11 @@ async def return_book(b_id, tg_id):
 
         if not status:
             return False
-        
+        await conn.execute("""
+        update users
+        set total_books = total_books + 1
+        where telegram_id = $1
+""", str(tg_id))
         await conn.execute("""
         update books 
         set is_available = true,
@@ -227,3 +232,17 @@ where borrows.user_id = $1 and returned_at is null
         return False
     finally:
         await conn.close()   
+
+
+
+
+def format_date(created_at):
+    today = date.today()
+
+    if created_at.date() == today:
+        return created_at.strftime("Сегодня в %H:%M")
+
+    elif (today - created_at.date()).days == 1:
+        return created_at.strftime("Вчера в %H:%M")
+
+    return created_at.strftime("%d.%m.%Y в %H:%M")

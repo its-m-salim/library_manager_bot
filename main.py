@@ -28,12 +28,12 @@ async def start_bot(message: Message):
     user = message.from_user
     if not await profile(user.id):
         await message.answer(f"""
-Привет, {user.full_name}
+👋 Добро пожаловать, {user.full_name}!\n\n📚 Здесь ты можешь просматривать каталог книг, брать книги и следить за своими выдачами.
 """, reply_markup=main_keyboard)    
         await create_user(user.username, user.full_name, user.id)
     else:
         await message.answer(f"""
-С возвращением, {user.full_name}!
+✨ С возвращением, {user.full_name}!\n\nРады видеть тебя снова в библиотеке 📚
 """, reply_markup=main_keyboard)
     
 
@@ -43,7 +43,8 @@ async def start_bot(message: Message):
 async def add_book(message: Message, command: CommandObject):
     if not command.args:
         await message.answer("""
-Для добавления книги введите имя и имя автора!
+📚 Чтобы добавить книгу, укажи её название и автора.
+Формат: /add_book Название книги/Имя автора
 """)
         return
 
@@ -51,16 +52,15 @@ async def add_book(message: Message, command: CommandObject):
 
     if not 1< len(data) < 3:
         await message.answer("""
-Неверный формат ввода! 
+⚠️ Неверный формат команды. 
 Используйте /help чтобы увидеть примеры
 """)
         return
 
     if await add_books(data[0], data[1]):
         await message.answer(f"""
-Книга {data[0]} от автора {data[1]}
-успешно добавлено в список книг!
-Посмотреть можно в /books если оно доступно
+✅ Книга «{data[0]}» — автор {data[1]} — успешно добавлена в библиотеку!
+📚 Открой /books, чтобы посмотреть каталог доступных книг.
 """)
     else:
         message.answer("""
@@ -88,15 +88,20 @@ async def books(message: Message):
 Попробуйте добавить свою книгу с помощью /add_book
 """)
         return
-    text = "Вот все доступные книги:\n"
+    text = """
+📚 Доступные книги:
+
+"""
     best = await bestsellers()
+
     for book in all_books:
-        text +=f"""
-{"*** BESTSELLER! ***" if best["id"] == book["id"] else None}
-ID: {book["id"]}
-Имя: {book["title"]}
-Автор: {book["author"]}
-Добавлено в: {book["added_at"]}
+        date_frm = format_date(book["added_at"])
+        bestseller = "🏆 БЕСТСЕЛЛЕР\n" if best is not None and best["id"] == book["id"]  else ""
+        text += f"""{bestseller}🆔 ID: {book["id"]}
+📖 Название: {book["title"]}
+✍️ Автор: {book["author"]}
+🕒 Добавлена: {date_frm}
+
 """
 
     if unvailable_b["count"] > 0:
@@ -109,26 +114,27 @@ ID: {book["id"]}
 async def bb(message: Message, command:CommandObject):
     if not command.args:
         await message.answer("""
-укажите id книги!
+📌 Укажи ID книги, которую хочешь взять.
+Пример: /borrow 12
 """)
         return
 
     data = command.args.split("/")
     if  len(data) > 1:
         await message.answer("""
-    Неверный формат ввода! 
-    Используйте /help чтобы увидеть примеры
+⚠️ Неверный формат команды. 
+Пример: /borrow 12
     """)
         return
 
     if not data[0].isdigit():
         await message.answer("""
-id не может быт словом!
+⚠️ ID книги должен быть числом.
 """)
         return
     status = await is_active(data[0])
     if not status:
-        await message.answer("книга не существует!")
+        await message.answer("🔎 Книга с таким ID не найдена.")
         return
     br = await get_borrowed(data[0], message.from_user.id)
     if br == "other_user":
@@ -139,83 +145,95 @@ id не может быт словом!
         return
     if br == "ok":
         await message.answer("""
-книга уже находится в вашем руке!
+📖 Эта книга уже у тебя. Посмотреть свои книги можно командой /my_borrows.
 """)
         return
     if await borrow_book(data[0], message.from_user.id):
         await message.answer("""
-книга успешно бран!
+✅ Книга успешно выдана тебе!\n\nПосмотреть свои книги можно командой /my_borrows.
 """)
     else:
         await message.answer("""
-книга либо нет либо занят
+❌ Не удалось выдать книгу. Возможно, её уже взял другой читатель.
 """)
 
 
 @dp.message(F.text == "📖 Мои книги")
-@dp.message(Command("my_books"))
+@dp.message(Command("my_borrows"))
 async def get_books(message: Message):
     all_books = await my_books(message.from_user.id)
 
     if not all_books:
-        await message.answer("you have not books")
+        await message.answer("📚 У тебя пока нет выданных книг.")
         return
 
     text = "Вот ваши книги:\n"
     
     for b in all_books:
+        date_frm = format_date(b["bat"])
         text += f"""
-
-ID: {b["id"]}
-title: {b["title"]}
-author: {b["author"]}
-borrowed at: {b["bat"]}
+🆔 ID: {b["id"]}
+📚 Название: {b["title"]}
+✍️ Автор: {b["author"]}
+🕒 Получена: {date_frm}
 """
     await message.answer(text)
     
 
 
 
-@dp.message(Command("return"))
+@dp.message(Command("return_book"))
 async def rb(message: Message, command:CommandObject):
     if not command.args:
         await message.answer("""
-укажите id книги!
+📌 Укажи ID книги, которую хочешь вернуть.
+Пример: /return_book 12
 """)
         return
 
     data = command.args.split("/")
     if  len(data) > 1:
         await message.answer("""
-    Неверный формат ввода! 
-    Используйте /help чтобы увидеть примеры
+⚠️ Неверный формат команды. 
+Пример: /return_book 12
     """)
         return
 
     if not data[0].isdigit():
         await message.answer("""
-id не может быт словом!
+⚠️ ID книги должен быть числом.
 """)
         return
     status = await is_active(data[0])
     if not status:
-        await message.answer("книга не существует!")
+        await message.answer("🔎 Книга с таким ID не найдена.")
         return
     br = await get_borrowed(data[0], message.from_user.id)
     if br == "free":
-        await message.answer("Это книга доступно в списке /books")
+        await message.answer("📚 Эта книга уже доступна в каталоге /books — возвращать её не нужно.")
         return
     elif br == "other_user":
-        await message.answer("Это книга находится в руке другого пользователя!")
+        await message.answer("📕 Эту книгу сейчас читает другой пользователь. Ты не можешь вернуть её за него.")
         return
     elif br == "ok":
         if await return_book(data[0], message.from_user.id):
+            user = await profile(message.from_user.id)
+            if user["total_books"] == 1:
+                await message.answer("""
+🎉 Поздравляем с первой прочитанной книгой!
+
+📖 Это только начало твоего читательского пути.
+
+✨ Продолжай читать и пополнять свою коллекцию знаний!
+""")
+                return
             await message.answer("""
-книга успешно выдан!
+✅ Книга успешно возвращена!
+Спасибо, что вернул её в библиотеку 📚
 """)
     else:
         await message.answer("""
-не успешная ошибка при выдачи
+❌ Не удалось вернуть книгу. Проверь ID и попробуй ещё раз.
 """)
 
 
