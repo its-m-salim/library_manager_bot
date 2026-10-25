@@ -28,6 +28,7 @@ async def create_tables():
             title varchar(100),
             author varchar(200),
             added_at timestamp default now(),
+            borrows_count int default 0,
             is_available bool default true,
             is_active bool default true
         );

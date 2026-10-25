@@ -63,11 +63,12 @@ async def add_books(title, author):
 async def active_books():
     try:
         conn = await connection_db()
+        unvailable = await conn.fetchrow("select count(*) as count from books where is_available = false")
         books = await conn.fetch("""
         select * from books 
         where is_available = true
 """)
-        return books
+        return unvailable, books
     except Exception as error:
         print(f"{type(error)}: {error} s_acb.py")     
     finally:
@@ -92,27 +93,23 @@ async def is_active(b_id):
 
 
 
-async def borrow_book(b_id, tg_id):
 
+
+async def get_borrowed(b_id, tg_id):
     try:
         conn = await connection_db()
-        status = await conn.execute("""
-        update books 
-        set is_available = False
-        where id = $1 and is_available = True;
-
+        br = await conn.fetchrow("""
+        select * from borrows
+        where book_id = $1
+        and returned_at is null
 """, int(b_id))
-        
-        if status == "UPDATE 1":
-            await conn.execute("""
-        insert into borrows(user_id, book_id) values
-            ($1, $2)
-""", str(tg_id), int(b_id))
-            return True
-        else:
-            return False
+        if not br:
+            return "free"
+        elif br["user_id"] != str(tg_id):
+            return "other_user"
+        return "ok"
     except Exception as error:
-        print(f"{type(error)}: {error} sbb.py")     
+        print(f"{type(error)}: {error} sgb.py")     
     finally:
         await conn.close()   
 
@@ -121,28 +118,90 @@ async def borrow_book(b_id, tg_id):
 
 
 
-async def return_book(b_id, tg_id):
+
+
+
+
+async def borrow_book(b_id, tg_id):
 
     try:
+
         conn = await connection_db()
-        status = await conn.execute("""
+        await conn.fetchrow("""
+        insert into borrows(user_id, book_id) values
+            ($1, $2)
+        """, str(tg_id), int(b_id))
+
+        
+        status = await conn.fetchrow("""
         update books 
-        set is_available = true
-        where id = $1 and is_available = false;
+        set is_available = False
+        where id = $1 and is_available = True
+        returning id
 
 """, int(b_id))
-        
-        if status == "UPDATE 1":
-            await conn.execute("""
-            update borrows
-            set returned_at = now()
-            where user_id = $1 and book_id = $2
-""", str(tg_id), int(b_id))
-            return True
-        else:
+        if not status:
             return False
+                
+        return True
     except Exception as error:
-        print(f"{type(error)}: {error} srb.py")     
+        print(f"{type(error)}: {error} sbb.py") 
+        return False    
+    finally:
+        await conn.close()   
+
+
+
+
+async def bestsellers():
+    try:
+        conn = await connection_db()
+        best  = await conn.fetchrow("""
+        select id from books
+        where borrows_count > 3
+        order by borrows_count desc,
+        is_available asc, id asc
+        limit 1
+""")
+        return best
+    except Exception as error:
+        print(f"{type(error)}: {error} sbest.py")     
+    finally:
+        await conn.close()   
+
+
+
+
+
+
+
+
+
+
+async def return_book(b_id, tg_id):
+    try:
+        conn = await connection_db()
+        status = await conn.fetchrow("""
+        update borrows
+        set returned_at = now()
+        where user_id = $1 and book_id = $2
+        and returned_at is null
+        returning id
+        """, str(tg_id), int(b_id))
+
+        if not status:
+            return False
+        
+        await conn.execute("""
+        update books 
+        set is_available = true,
+        borrows_count = borrows_count + 1
+        where id = $1 and is_available = false""", int(b_id))
+
+        return True
+    except Exception as error:
+        print(f"{type(error)}: {error} srb.py")    
+        return False 
     finally:
         await conn.close()   
 
@@ -158,12 +217,13 @@ async def my_books(tg_id):
     try:
         conn = await connection_db()
         books = await conn.fetch("""
-select books.title as title, books.author as author, borrows.borrowed_at as bat from borrows
+select books.id as id,  books.title as title, books.author as author, borrows.borrowed_at as bat from borrows
 join books on books.id = borrows.book_id
 where borrows.user_id = $1 and returned_at is null
 """, str(tg_id))
         return books
     except Exception as error:
         print(f"{type(error)}: {error} smb.py")     
+        return False
     finally:
         await conn.close()   

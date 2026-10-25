@@ -73,22 +73,34 @@ async def add_book(message: Message, command: CommandObject):
 @dp.message(F.text == "📚 Доступные книги")
 @dp.message(Command("books"))
 async def books(message: Message):
-    bookss = await active_books()
-    if not bookss:
+
+
+    unvailable_b, all_books = await active_books()
+    if unvailable_b["count"] > 0 and not all_books:
+        await message.answer("""
+Все существуюшие книги находится в руках у других ползователей 
+пока ждете можете добавить свою книгу в /add_book!
+""")
+        return
+    if not all_books:
         await message.answer("""
 Каталог книг пока пуста
 Попробуйте добавить свою книгу с помощью /add_book
 """)
         return
     text = "Вот все доступные книги:\n"
-
-    for book in bookss:
+    best = await bestsellers()
+    for book in all_books:
         text +=f"""
+{"*** BESTSELLER! ***" if best["id"] == book["id"] else None}
 ID: {book["id"]}
 Имя: {book["title"]}
 Автор: {book["author"]}
 Добавлено в: {book["added_at"]}
 """
+
+    if unvailable_b["count"] > 0:
+        text += f"\nВсего {unvailable_b["count"]} книг находится у руках ползователей"
     await message.answer(text)
 
 
@@ -118,10 +130,18 @@ id не может быт словом!
     if not status:
         await message.answer("книга не существует!")
         return
-    else:
-        if not status["is_available"]:
-            await message.answer("книга занят!")
-            return
+    br = await get_borrowed(data[0], message.from_user.id)
+    if br == "other_user":
+        await message.answer("""
+книга находится в руке другого пользователя!
+дождитнсь пока книга станет доступной!
+""")
+        return
+    if br == "ok":
+        await message.answer("""
+книга уже находится в вашем руке!
+""")
+        return
     if await borrow_book(data[0], message.from_user.id):
         await message.answer("""
 книга успешно бран!
@@ -142,9 +162,11 @@ async def get_books(message: Message):
         return
 
     text = "Вот ваши книги:\n"
-
+    
     for b in all_books:
         text += f"""
+
+ID: {b["id"]}
 title: {b["title"]}
 author: {b["author"]}
 borrowed at: {b["bat"]}
@@ -179,12 +201,16 @@ id не может быт словом!
     if not status:
         await message.answer("книга не существует!")
         return
-    else:
-        if status["is_available"]:
-            await message.answer("Вы не брали эту книгу!")
-            return
-    if await return_book(data[0], message.from_user.id):
-        await message.answer("""
+    br = await get_borrowed(data[0], message.from_user.id)
+    if br == "free":
+        await message.answer("Это книга доступно в списке /books")
+        return
+    elif br == "other_user":
+        await message.answer("Это книга находится в руке другого пользователя!")
+        return
+    elif br == "ok":
+        if await return_book(data[0], message.from_user.id):
+            await message.answer("""
 книга успешно выдан!
 """)
     else:
